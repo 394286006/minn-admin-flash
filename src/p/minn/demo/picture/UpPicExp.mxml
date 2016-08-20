@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		   xmlns:s="library://ns.adobe.com/flex/spark"
+		   xmlns:mx="library://ns.adobe.com/flex/mx" width="386" height="224" 
+		   horizontalScrollPolicy="off" verticalScrollPolicy="off" 
+		   verticalGap="0" 
+		    creationComplete="vbox_creationCompleteHandler(event)">
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.events.FlexEvent;
+			import mx.events.FlexMouseEvent;
+			import mx.events.ListEvent;
+			import mx.managers.PopUpManager;
+			import mx.modules.ModuleLoader;
+			import mx.rpc.http.HTTPService;
+			import mx.utils.Base64Encoder;
+			
+			import p.minn.message.Message;
+			import p.minn.util.MinnUtil;
+			
+
+			[Bindable]
+			private var filearr:ArrayCollection=new ArrayCollection();
+			
+			private var _pictureid:String;
+
+			private var upfile:FileReference;
+			private var imageTypes:FileFilter;
+			private var _title:String="";
+			private var _upfilename:String;
+
+			public function get pictureid():String{
+				return _pictureid;
+			}
+			
+			public function set pictureid(_pictureid:String):void{
+				this._pictureid=_pictureid;
+			}
+			
+
+			public function set title(t:String):void{
+				_title=t;
+			}
+			
+			protected function vbox_creationCompleteHandler(event:FlexEvent):void
+			{
+				// TODO Auto-generated method stub
+				title_id.text=_title;
+				upfile=new FileReference();
+				upfile.addEventListener(Event.SELECT, selectHandler);
+				upfile.addEventListener(Event.OPEN, openHandler);
+				upfile.addEventListener(ProgressEvent.PROGRESS, progressHandler);
+				upfile.addEventListener(IOErrorEvent.IO_ERROR, uploadIoErrorHandler);
+				upfile.addEventListener(DataEvent.UPLOAD_COMPLETE_DATA, uploadCompleteHandler);
+				upfile.addEventListener(Event.CANCEL,cancelHandler);
+				
+				imageTypes = new FileFilter("图片(png.jpeg.jpg.gif)", "*.jpg");
+			}
+			
+			//显示图片
+			public function img_itemClickHandler(event:ListEvent=null):void
+			{
+				// TODO Auto-generated method stub
+				img_add_id.selected=false;
+				if(files_id.selectedItem){
+						txtFilename.text=files_id.selectedItem.imgname;
+					img_id.source=Config.UPLOAD_DIR+"/"+files_id.selectedItem.imgpath;
+				}else{
+					txtFilename.text="";
+					img_id.source="";
+				}
+			}
+			
+			
+			private function browseHandler(event:Event):void {
+				btnUpload.enabled = false;
+				img_add_id.enabled=false;
+				upfile.browse([imageTypes]);
+			}
+			private function cancelHandler(e:Event):void
+			{
+			}
+			private function selectHandler(event:Event):void {
+				txtFilename.text =upfile.name;
+				txtFilename_cn_id.text=upfile.name.split(".")[0];
+				txtFilename_cn_id.setFocus();
+				btnUpload.enabled = true;
+				img_add_id.enabled=true;
+				cn_filename_id.visible=true;
+				img_id.source=upfile.data;
+			}
+			
+			private function openHandler(event:Event):void {
+			}
+		
+			private function progressHandler(event:ProgressEvent):void {
+				
+			}
+			
+			private function uploadCompleteHandler(event:DataEvent):void {
+				try {
+					var message:Message=MinnUtil.getMessage(decodeURIComponent(event.data));
+					if(message.sucess){
+						refresh();
+						img_id.source=Config.UPLOAD_DIR+"/"+message.messageBody.imgpath;
+						btnUpload.enabled=false;
+						img_add_id.enabled=false;
+						cn_filename_id.visible=false;
+						txtFilename.text="";
+						
+					}else{
+						Alert.show(message.messageBody,"提示")
+					}
+				}
+				catch (error:Error) {
+					Alert.show("返回元素处理失败: " + error.message,"提示");
+				}
+			}
+			
+			
+			private function uploadIoErrorHandler(event:IOErrorEvent):void {
+				Alert.show("IO Error: " + event.toString());
+			}
+
+			protected function up_clickHandler(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				var url:String=null;
+				var messageBody:Object=new Object();
+				var imgtypearr:Array=upfile.name.split(".");
+				if(img_add_id.selected){
+					url=Config.UPLOAD_URL+"?method=savePic";
+					var b64:Base64Encoder=new Base64Encoder();
+					var ln:String=Config.loginInfo.loginName+"_"+MinnUtil.getCurentDateAndTime("YYYYMMDDHHNNSS");
+					b64.encode(ln);
+					_upfilename=b64.toString()+"."+imgtypearr[imgtypearr.length-1];
+					messageBody.imgpath=_upfilename;
+				}else if(files_id.selectedItem){
+					url=Config.UPLOAD_URL+"?method=updatePic";
+					messageBody=files_id.selectedItem;
+					_upfilename=files_id.selectedItem.imgpath;
+				}else{
+					Alert.show("你好,请勾选新增或选择列表中的其中一条数据!","提示");
+					return;
+				}
+				messageBody.sourcename=upfile.name;
+				messageBody.imgname=txtFilename_cn_id.text;
+				messageBody.pictype=imgtypearr[imgtypearr.length-1];
+				messageBody.pictureid=_pictureid;
+				var request:URLRequest = new URLRequest(url);
+				request.method = "post";
+
+				var variables:URLVariables = new URLVariables();
+				variables.upfilename=messageBody.imgpath; 
+				variables.messageBody=encodeURIComponent(MinnUtil.getEncodeMessage(messageBody));
+				request.data =variables;
+				upfile.upload(request);
+			}
+			
+			public function refresh(evt:Event=null):void{
+				var messageBody:Object=new Object();
+				messageBody.qtype="pictureid";
+				messageBody.query=this._pictureid;
+				var param:Message=new Message(MinnUtil.getEncodeMessage(messageBody));
+				param.setSecurityInfo(this.parentApplication.PRIVATEKEY,Math.random(),MinnUtil.getTimeStamp());
+				var fileService:HTTPService=new HTTPService();
+				MinnUtil.send(fileService,"/pic?method=queryPic",invoke,param);
+			}
+			
+			private function invoke(rs:Message):void{
+				if(rs.sucess){
+					filearr.removeAll();
+					filearr.addAll(new ArrayCollection(rs.messageBody.result));
+				}else{
+					this.parentApplication.msgAlert(rs.messageBody);
+				}
+				
+			}
+			
+			
+			public function del_clickHandler(event:MouseEvent,obj:Object):void
+			{
+				// TODO Auto-generated method stub
+				var messageBody:Object=new Object();
+				messageBody.id=obj.id;
+				var param:Message=new Message(MinnUtil.getEncodeMessage(messageBody));
+				param.setSecurityInfo(this.parentApplication.PRIVATEKEY,Math.random(),MinnUtil.getTimeStamp());
+				var fileService:HTTPService=new HTTPService();
+				MinnUtil.send(fileService,"/pic?method=delPic",invokeDel,param);
+			}
+			private function invokeDel(rs:Message):void{
+				if(rs.sucess){
+					refresh();
+					img_id.source="";
+					this.parentApplication.msgAlert("删除成功！");
+				}else{
+					this.parentApplication.msgAlert(rs.messageBody);
+				}
+			}
+			
+			public function firstPage_clickHandler(event:MouseEvent,messageBody:Object):void
+			{
+				// TODO Auto-generated method stub
+				messageBody.isfirst=messageBody.isfirst==1 ? 0:1;
+				var param:Message=new Message(MinnUtil.getEncodeMessage(messageBody));
+				param.setSecurityInfo(this.parentApplication.PRIVATEKEY,Math.random(),MinnUtil.getTimeStamp());
+				var fileService:HTTPService=new HTTPService();
+				MinnUtil.send(fileService,"/pic?method=setFirstPagePic",invokeSetPage,param);
+			}
+			private function invokeSetPage(rs:Message):void{
+				if(rs.sucess){
+					refresh();
+					this.parentApplication.msgAlert("设置成功！");
+				}else{
+					this.parentApplication.msgAlert(rs.messageBody);
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<mx:Label text="" id="title_id"/>
+	<mx:HBox horizontalGap="1" width="100%">
+		<mx:Canvas width="180" height="150" borderColor="#CEBBBB" borderAlpha="1" horizontalScrollPolicy="off" verticalScrollPolicy="off"  borderVisible="true" borderStyle="outset" >
+			<mx:Image  id="img_id" width="100%" height="250" />
+		</mx:Canvas>
+		<mx:DataGrid dataProvider="{filearr}" width="100%" height="100%" id="files_id" itemClick="img_itemClickHandler(event)">
+			<mx:columns>
+				<mx:DataGridColumn dataField="imgname" headerText="图片名称">
+					
+				</mx:DataGridColumn>
+				<mx:DataGridColumn width="40" headerText="操作">
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:Button click="outerDocument.del_clickHandler(event,data)" label="删除">
+							</mx:Button>
+						</fx:Component>
+					</mx:itemRenderer>
+				</mx:DataGridColumn>
+				<mx:DataGridColumn width="40" headerText="首页图片">
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:Button click="outerDocument.firstPage_clickHandler(event,data)" label="{data.isfirst==1? '是':'否'}">
+								
+							</mx:Button>
+						</fx:Component>
+					</mx:itemRenderer>
+				</mx:DataGridColumn>
+			</mx:columns>
+		</mx:DataGrid>
+	</mx:HBox>
+	<mx:HBox horizontalGap="10">
+		<mx:Button label="浏览.."  click="browseHandler(event)"/>
+		<mx:Button label="上传文件" id="btnUpload" enabled="false" click="up_clickHandler(event)"/>
+		<mx:CheckBox label="新增" id="img_add_id" enabled="false" selected="true"/>
+	</mx:HBox>
+	<mx:HBox>
+		<mx:Label text="图片名称:"/><mx:Label id="txtFilename"/>
+	</mx:HBox>
+	
+	<mx:HBox id="cn_filename_id" visible="false" horizontalGap="0">
+		<mx:Label text="保存的中文名称:" />	<mx:TextInput id="txtFilename_cn_id" height="20"/>
+	</mx:HBox>
+</mx:VBox>

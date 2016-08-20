@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Application xmlns:fx="http://ns.adobe.com/mxml/2009"
+			   xmlns:s="library://ns.adobe.com/flex/spark"
+			   xmlns:mx="library://ns.adobe.com/flex/mx"
+			   xmlns:flexmdi="flexmdi.containers.*"
+			   minWidth="955" minHeight="600" creationComplete="application_creationCompleteHandler(event)">
+	<s:layout>
+		<s:VerticalLayout horizontalAlign="center"/>
+	</s:layout>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx "library://ns.adobe.com/flex/halo";
+		@namespace mx2 "library://ns.adobe.com/flex/mx";  
+		@namespace flexmdi "http://flexmdi.googlecode.com/";
+		
+		.hb { 
+			width: 1000; 
+			height: 800; 
+		}
+		
+		.mdiCanvas {
+			width: 999;
+			height: 999;
+		}
+		 
+	</fx:Style> 
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.events.FlexEvent;
+			import mx.events.MenuEvent;
+			import mx.managers.BrowserManager;
+			import mx.managers.IBrowserManager;
+			import mx.managers.PopUpManager;
+			import mx.resources.IResourceManager;
+			import mx.resources.ResourceManager;
+			
+			import p.minn.MainConfig;
+			import p.minn.message.Message;
+			import p.minn.proxy.WindowProxy;
+			import p.minn.util.MinnUtil;
+			
+			public var KEY:String='';
+			public var PRIVATEKEY:String='';
+			private var bm:IBrowserManager;
+			private var mc:MainConfig;
+			[Bindable]
+		    public var menubarData:ArrayCollection=null;
+			
+			[Bindable]
+			public var locales:ArrayCollection =null;
+			protected function application_creationCompleteHandler(event:FlexEvent):void
+			{
+			       
+			  
+				Alert.okLabel=resourceManager.getString('resources','main_alert_oklabel');
+				Config.globalLanguage=flash.system.Capabilities.language.replace("-","_");
+				if(Config.PUBLIC){
+					//Config.BASE_URL=ExternalInterface.call("getURL");
+				}
+				if(Config.SUBFFIX==".jpg"){
+					bm=BrowserManager.getInstance();
+					bm.init(); 
+					if(bm.url==null)
+					{
+						for(;;){
+							Alert.show(resourceManager.getString('resources','validate_illegal_operator'),resourceManager.getString('resources','alert_title_msg'));
+						}
+					}
+				}
+				MinnUtil.BASEURL=Config.BASE_URL;
+				MinnUtil.SUBFFIX=Config.SUBFFIX;
+				WindowProxy.getInstance(mdiCanvas); 
+			    mc=MainConfig.getInstance(this,Config);
+				menubar_id.addEventListener(MenuEvent.ITEM_CLICK,mc.menubar_itemClickHandler);
+				locales=mc.locales;
+				mc.init();
+			}
+			
+			public function set globalLanguage(_val:String):void{
+				Config.globalLanguage=_val;
+			}
+			
+			public function get rm():IResourceManager{
+				return resourceManager;
+			}
+			
+			public function getPrivateMenu(_loginInfo:Object):void{
+				Config.loginInfo=_loginInfo;
+				mc.getPrivateMenu(Config.loginInfo,Config.globalLanguage);
+			}
+				
+			public function msgAlert(msg:String):void{
+				Alert.show(msg, resourceManager.getString('resources','alert_title_msg'));
+			}
+			
+		   public function checkAlert(msg:String,invoke:Function):void{
+			   Alert.show(msg, resourceManager.getString('resources','alert_title_msg'), Alert.OK | Alert.CANCEL, null, function(evt_obj:Object):void{
+				   if (evt_obj.detail == Alert.OK) {
+					   invoke();
+				   }
+			   });
+		   }
+			 
+		]]>
+	</fx:Script>
+	
+	<fx:Metadata>
+		[ResourceBundle("resources")] 
+	</fx:Metadata> 
+	<mx:MenuBar  dataProvider="{menubarData}" labelField="text" id="menubar_id" visible="false"/>
+	<flexmdi:MDICanvas id="mdiCanvas" width="100%" height="100%" >
+	</flexmdi:MDICanvas>
+</s:Application>

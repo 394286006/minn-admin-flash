@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx"
+			   title="图片分类管理维护" 
+			   width="600" height="252"  
+			   close="this.visible=false" creationComplete="titlewindow_creationCompleteHandler(event)">
+	<s:layout>
+		<s:VerticalLayout/>
+	</s:layout>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.events.FlexEvent;
+			import mx.events.ListEvent;
+			import mx.events.ValidationResultEvent;
+			import mx.rpc.http.HTTPService;
+			import mx.validators.Validator;
+			
+			import p.minn.message.Message;
+			import p.minn.util.MinnUtil;
+			[Bindable]
+			private var _item:Object;
+			[Bindable]
+			private var keyStatus:Boolean=true;
+			private var _pid:String="";
+			
+			[Bindable]
+			private var actives:ArrayCollection=new ArrayCollection();
+			[Bindable]
+			private var languages:ArrayCollection=new ArrayCollection();
+			
+			protected function titlewindow_creationCompleteHandler(event:FlexEvent):void
+			{
+				// TODO Auto-generated method stub
+				var messageBody:Object=new Object();
+				var param:Message=new Message(MinnUtil.getEncodeMessage(messageBody));
+				param.setSecurityInfo(this.parentApplication.PRIVATEKEY,Math.random(),MinnUtil.getTimeStamp());
+				var dictypeService:HTTPService=new HTTPService();
+				MinnUtil.send(dictypeService,"/dic?method=getDic&aptype=swf&type='LANGUAGE','ACTIVETYPE'",invokeDic,param);
+				
+				
+
+			}
+			
+			public function invokeDic(rs:Message):void{
+				
+				if(rs.sucess){
+					var langs:Array=rs.messageBody.LANGUAGE;
+					languages.source=langs;
+					actives.addAll(new ArrayCollection(rs.messageBody.ACTIVETYPE));
+					var local:String=String(resourceManager.localeChain[0]).replace("-","_");
+					for(var i:int=0;i<langs.length;i++){
+						if(local.indexOf(langs[i].id)!=-1){
+							language_id.selectedIndex=i;
+							break;
+						}
+					}
+				}else{
+					this.parentApplication.msgAlert(rs.messageBody);
+				}
+			}
+			
+			
+			public function showValue(item:Object,_keystatus:Boolean):void{
+				_item=item;
+				
+				keyStatus=_keystatus;
+				
+				if(keyStatus){
+					this._pid=item.id;
+					pnode_id.text =item.text;
+					name_id.text="";
+					sort_id.text="";
+					comment_id.text="";
+					//this.title=resourceManager.getString('resources','dictionary_add_title')
+				}else{
+					if(_item.id<0){
+						this.parentApplication.msgAlert("该条数据不能被修改");
+						return;
+					}
+					//this.title=resourceManager.getString('resources','dictionary_modify_title')
+					
+				}
+				this.visible=true;
+				
+				
+				for(var i:int=0;i<actives.length;i++){
+					if(item.active_v==actives[i].id){
+						language_id.selectedIndex=i;
+						break;
+					}
+				}
+				
+			}			
+			
+			
+			protected function saveOrModify_clickHandler(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				var validatorErrorArray:Array = Validator.validateAll(validatorArray); 
+				if(validatorErrorArray.length >0){
+					this.parentApplication.msgAlert(resourceManager.getString('resources','validate_check_msg'));
+					return;
+				}
+				
+				
+				var messageBody:Object=new Object();
+				if(!keyStatus){
+					messageBody.id=_item.id;
+				}
+				messageBody.name=name_id.text;
+				messageBody.language=language_id.selectedItem.id;
+				messageBody.sort=sort_id.text;
+				messageBody.active=active_id.selectedItem.id;
+				messageBody.comment=comment_id.text;
+				var url:String="/category?method=update";
+				if(keyStatus){
+					url="/category?method=save";
+					messageBody.pid=_pid;
+				}else{
+					messageBody.gcommentid=_item.gcommentid;
+					messageBody.gid=_item.gid;
+					messageBody.pid=_item.pId;
+				}
+				var param:Message=new Message(MinnUtil.getEncodeMessage(messageBody));
+				param.setSecurityInfo(this.parentApplication.PRIVATEKEY,Math.random(),MinnUtil.getTimeStamp());
+				var dictypeService:HTTPService=new HTTPService();
+				
+				MinnUtil.send(dictypeService,url,invoke,param);
+				
+			}
+			
+			private function invoke(rs:Message):void{
+				if(rs.sucess){
+					this.visible=false;
+					this._pid="";
+					this.parentDocument.refreshTreeMenu();
+				}else{
+					this.parentApplication.msgAlert(rs.messageBody);
+				}
+			}
+			
+			
+			
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		<fx:Array id="validatorArray">
+			<mx:StringValidator 
+				source="{name_id}" 
+				requiredFieldError="名称不能为空！"
+				property="text" 
+				required="true" />
+			<mx:NumberValidator source="{sort_id}" property="text" integerError="请输入整型!" invalidCharError="请输入整型!" invalidFormatCharsError="请输入整型!"
+								minValue="0"  domain="int"
+								required="true" requiredFieldError="数量不能为空！"
+								/>
+			<mx:StringValidator
+				source="{comment_id}" 
+				requiredFieldError="描述不能为空！"
+				property="text" 
+				required="true" />
+			
+		</fx:Array>
+		
+	</fx:Declarations>
+	
+	<s:Spacer width="0" height="20"/>
+	<s:TileGroup width="100%" height="88" horizontalAlign="center" requestedColumnCount="4"
+				 requestedRowCount="6">
+		<mx:Label text="{resourceManager.getString('resources','common_name')}"/>
+		<mx:TextInput id="name_id"  width="130"  text="{_item.text}"/>
+		<mx:Label text="语言"/> 
+		<mx:ComboBox id="language_id" editable="false" enabled="false" dataProvider="{languages}" labelField="text" width="129"/>
+		<mx:Label text="排序"/>
+		<mx:TextInput id="sort_id" width="132" text="{_item.sort}"/>
+		<mx:Label text="状态"/>
+		<mx:ComboBox id="active_id" dataProvider="{actives}" labelField="text" width="129"/>
+		<mx:Label text="描述"/>
+		<mx:TextInput id="comment_id" width="132" text="{_item.comment}"/>
+		<mx:Label text="父节点"/>
+		<mx:TextInput id="pnode_id" editable="false" width="132" text="{_item.pnode}"/>	
+		<s:Spacer/>
+		
+		<s:Button label="{resourceManager.getString('resources','common_ok')}" click="saveOrModify_clickHandler(event)"/>
+		<s:Button label="{resourceManager.getString('resources','common_cancel')}" click="this.visible=false;"/>
+	</s:TileGroup>
+	
+</s:TitleWindow>

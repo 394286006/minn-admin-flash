@@ -1,0 +1,355 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Module xmlns:fx="http://ns.adobe.com/mxml/2009"
+		   xmlns:s="library://ns.adobe.com/flex/spark"
+		   xmlns:mx="library://ns.adobe.com/flex/mx"
+		   xmlns:common="p.minn.common.*"
+		   xmlns:picture="p.minn.demo.picture.*"
+		   width="100%" height="100%" layout="absolute" name="图片管理" creationComplete="creationCompleteHandler(event)">
+	<fx:Script>
+		<![CDATA[
+			/**
+			 * @author minn
+			 * @QQ     394286006
+			 */ 
+			import com.adobe.serialization.json.JSON;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Tree;
+			import mx.core.FlexGlobals;
+			import mx.events.FlexEvent;
+			import mx.events.ListEvent;
+			import mx.events.MenuEvent;
+			import mx.rpc.http.HTTPService;
+			
+			import p.minn.message.Message;
+			import p.minn.util.MinnUtil;
+			
+			
+			[Bindable]
+			private var results:ArrayCollection=new ArrayCollection();
+			private var myContextMenu:ContextMenu=new ContextMenu();
+			private var textLabel:String = "Right Click";
+			private var redRectangle:Sprite;
+			private var label1:TextField;
+			private var size:uint = 100;
+			private var black:uint = 0x000000;
+			private var red:uint = 0xFF0000;
+//			[Bindable]
+//			private var treeData:Array=[{label:'root1',children:[{label:"Mail Box",children:[{label:"test1",data:1},{label:"test2",data:1}]},
+//				{label:"Mail Box1",children:[{label:"test2",data:1}]}]}
+//			];
+			
+			[Bindable]
+			private var _treeMenuData:ArrayCollection =new ArrayCollection();
+//				<>
+//					<menuitem name="系统管理" data="0">
+//						<menuitem name="操作员管理" url="mvc/view/manager/operator/component/OperatorMngPanel.swf"/>
+//						<menuitem name="用户管理" url="mvc/view/manager/user/component/UserMngPanel.swf"/>
+//						<menuitem name="付款方式管理" url="mvc/view/manager/payway/component/PaywayMngPanel.swf"/>
+//					</menuitem>
+//					<menuitem name="商品管理" data="top">
+//						<menuitem name="商品管理" url="mvc/view/manager/Object/component/MerchandiseMngPanel.swf"/>
+//						<menuitem name="商品类型管理" url="mvc/view/manager/Object/component/CtypeMngPanel.swf"/>
+//					</menuitem>
+//					<menuitem name="订单管理" data="top">
+//						<menuitem name="查看订单" url="mvc/view/manager/order/component/OrderMngPanel.swf"/>
+//					</menuitem>
+//				</>;
+			
+			private var ctypemenu:ContextMenu=new ContextMenu();
+			private var maxcategorymenuitem:ContextMenuItem=null;
+			private var mincategorymenuitem:ContextMenuItem=null;
+			private var modifycategorymenuitem:ContextMenuItem=null;
+			private var delcategorymenuitem:ContextMenuItem=null;
+			protected function creationCompleteHandler(event:Event):void
+			{
+				// TODO Auto-generated method stub
+				//this.appFacade.startup(AppCommand.MERCHANDISE_MNG_STARTUP,this);
+//				removeDefaultItems();
+//				addChildren();
+//				addCustomMenuItems();
+				
+				ctypemenu.hideBuiltInItems();
+				ctypemenu.clipboardMenu=false;
+				maxcategorymenuitem = new ContextMenuItem("添加大类", false, true);
+				mincategorymenuitem = new ContextMenuItem("添加商品类型", false, false);
+				modifycategorymenuitem = new ContextMenuItem("修改", false, true);
+				delcategorymenuitem = new ContextMenuItem("--删除--", false, true);
+				maxcategorymenuitem.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT,maxCategoryAddHandler);
+//				mincategorymenuitem.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT,categoryAddHandler);
+				modifycategorymenuitem.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT,categoryModifyHndler);
+				delcategorymenuitem.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT,categoryDelHndler);
+				var contextMenuCustomItems:Array = new Array();
+				contextMenuCustomItems.push(maxcategorymenuitem);
+				contextMenuCustomItems.push(mincategorymenuitem);
+				contextMenuCustomItems.push(modifycategorymenuitem);
+				contextMenuCustomItems.push(delcategorymenuitem);
+				ctypemenu.customItems=contextMenuCustomItems;
+				menutree_id.contextMenu=ctypemenu;
+				refreshTreeMenu();
+				
+				var messageBody:Object=new Object();
+				var param:Message=new Message(MinnUtil.getEncodeMessage(messageBody));
+				param.setSecurityInfo(this.parentApplication.PRIVATEKEY,Math.random(),MinnUtil.getTimeStamp());
+				var dictypeService:HTTPService=new HTTPService();
+				MinnUtil.send(dictypeService,"/dic?method=getDic&aptype=swf&type='LANGUAGE','ACTIVETYPE'",invokeDic,param);
+
+			}
+			private function invokeDic(rs:Message):void{
+				if(rs.sucess){
+					picturepanel_id.initDic(rs.messageBody);
+				}else{
+					this.parentApplication.msgAlert(rs.messageBody);
+				}
+			}
+			
+			private function maxCategoryAddHandler(e:ContextMenuEvent):void{
+				
+				if(menutree_id.selectedItem){
+					panel_id.showValue(menutree_id.selectedItem,true);
+				}else{
+					this.parentApplication.msgAlert("请先选择类别资源数据");
+				}
+				
+			}
+			
+			private function categoryModifyHndler(e:ContextMenuEvent):void{
+				if(menutree_id.selectedItem){
+					panel_id.showValue(menutree_id.selectedItem,false);
+				}else{
+					this.parentApplication.msgAlert("请先选择类别资源数据");
+				}
+			}
+			
+			public function refreshTreeMenu(evt:Event=null):void{
+				var messageBody:Object=new Object();
+				var param:Message=new Message(MinnUtil.getEncodeMessage(messageBody));
+				param.setSecurityInfo(this.parentApplication.PRIVATEKEY,Math.random(),MinnUtil.getTimeStamp());
+				var treeMenuService:HTTPService=new HTTPService();
+				MinnUtil.send(treeMenuService,"/category?method=getCategory",invokeTreeMenu,param);
+			}
+			
+			private function invokeTreeMenu(rs:Message):void{
+				if(rs.sucess){
+					_treeMenuData.source=rs.messageBody;
+					menutree_id.selectedIndex=0;
+					menutree_id.expandChildrenOf(menutree_id.selectedItem,true);
+				}else{
+					this.parentApplication.msgAlert(rs.messageBody);
+				}
+				
+			}
+			
+			private function categoryDelHndler(e:ContextMenuEvent):void{
+//			  var item:Object=new Object();
+//			 item.id=menutree_id.selectedItem.@id;
+			  if(!menutree_id.selectedItem){
+				  this.parentApplication.msgAlert("请先选择数据!");
+				  return;
+			  }	
+			 if(menutree_id.selectedItem.pid==-2){
+				 this.parentApplication.msgAlert("根节点不能被删除");
+				 
+			 }else if(menutree_id.selectedItem.children.length>0){
+				 this.parentApplication.msgAlert("请先删除子节点");
+			 }else{
+				 this.parentApplication.checkAlert(resourceManager.getString('resources','common_delete_alert'),executeDelCategory);
+			 }
+				
+			 
+          
+			}
+			private function executeDelCategory():void{
+				var messageBody:Object=new Object();
+				messageBody.id=menutree_id.selectedItem.id;
+				var param:Message=new Message(MinnUtil.getEncodeMessage(messageBody));
+				param.setSecurityInfo(this.parentApplication.PRIVATEKEY,Math.random(),MinnUtil.getTimeStamp());
+				var dictypeService:HTTPService=new HTTPService();
+				MinnUtil.send(dictypeService,"/category?method=del",invokeDelCategory,param);
+			}
+			
+			private function invokeDelCategory(rs:Message):void{
+				if(rs.sucess){
+					refreshTreeMenu(null);
+				}else{
+					this.parentApplication.msgAlert(rs.messageBody);
+				}
+			}
+		
+			
+			
+			protected function add_clickHandler(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				if(menutree_id.selectedItem&&menutree_id.selectedItem.id!=-1){
+					picturepanel_id.showValue(menutree_id.selectedItem,true);
+				}else{
+					this.parentApplication.msgAlert('请选择类别');
+				}
+				
+			}
+			 
+		
+			
+		
+			/**
+			 * 
+			 * 菜单树，控制右键小类菜单是否可操作
+			 **/
+			protected function menutree_id_clickHandler(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				if(menutree_id.selectedItem){
+					refresh();
+				}
+			}
+			public function refresh(e:Event=null):void{
+				
+				var messageBody:Object=new Object();
+				messageBody.page=pageBar.pageIndex
+				messageBody.rp=pageBar.pageSize;
+				var query:String=Config.UNKNOWN;
+				if(menutree_id.selectedItem){
+					query=menutree_id.selectedItem.id;
+				}
+				query+=","
+				if(name_id.text==''){
+					query+=Config.UNKNOWN;
+				}else{
+					query+=name_id.text;
+				}
+				
+				messageBody.qtype="categoryid,name";
+				messageBody.query=query;
+				var param:Message=new Message(MinnUtil.getEncodeMessage(messageBody));
+				param.setSecurityInfo(this.parentApplication.PRIVATEKEY,Math.random(),MinnUtil.getTimeStamp());
+				var dictypeService:HTTPService=new HTTPService();
+				MinnUtil.send(dictypeService,"/pic?method=query",invokeQuery,param);
+			}
+			
+			/**
+			 * 查询结果回调函数
+			 **/ 
+			public function invokeQuery(rs:Message):void{
+				if(rs.sucess){
+					pageBar.recordCount=rs.messageBody.total;
+					results.source=rs.messageBody.result;
+				}else{
+					this.parentApplication.msgAlert(rs.messageBody);
+				}
+			}
+
+			public function del_clickHandler(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				this.parentApplication.checkAlert(resourceManager.getString('resources','common_delete_alert'),executeDel);
+			}
+			
+			private function executeDel():void{
+				var messageBody:Object=new Object();
+				messageBody.id=datagrid_id.selectedItem.id;
+				var param:Message=new Message(MinnUtil.getEncodeMessage(messageBody));
+				param.setSecurityInfo(this.parentApplication.PRIVATEKEY,Math.random(),MinnUtil.getTimeStamp());
+				var dictypeService:HTTPService=new HTTPService();
+				MinnUtil.send(dictypeService,"/pic?method=del",invokeDel,param);
+			}
+			
+			private function invokeDel(rs:Message):void{
+				if(rs.sucess){
+					refresh(null);
+				}else{
+					this.parentApplication.msgAlert(rs.messageBody);
+				}
+			}
+
+
+			protected function firstPage_clickHandler(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				var messageBody:Object=new Object();
+				var param:Message=new Message(MinnUtil.getEncodeMessage(messageBody));
+				param.setSecurityInfo(this.parentApplication.PRIVATEKEY,Math.random(),MinnUtil.getTimeStamp());
+				var picService:HTTPService=new HTTPService();
+				MinnUtil.send(picService,"/pic?method=genFirstPagePic",invokegenFirstPagePic,param);
+				
+			}
+			
+			private function invokegenFirstPagePic(rs:Message):void{
+				if(rs.sucess){
+					this.parentApplication.msgAlert(rs.messageBody.info);
+				}else{
+					this.parentApplication.msgAlert(rs.messageBody);
+				}
+			}
+
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		
+	</fx:Declarations>
+	
+	<mx:states>
+		<s:State name="default"/>    
+		<s:State name="qry"/>
+	</mx:states>
+	<mx:HBox width="100%" height="100%">
+		
+
+	<mx:VBox height="100%" width="200">
+		<mx:HBox width="100%">
+			<mx:Label text="类别资源"/><s:Spacer width="100%"/><mx:Button label="刷新" click="refreshTreeMenu()"/>
+		</mx:HBox>
+		<mx:Tree height="100%" width="100%" labelField="text" showRoot="true" dataProvider="{_treeMenuData}" click="menutree_id_clickHandler(event)"  id="menutree_id" >
+		</mx:Tree>
+	</mx:VBox>
+	
+	<mx:VBox width="100%" height="100%" verticalGap="0">
+		<mx:HBox width="100%">
+			<mx:Spacer width="100%"/>
+			<s:ToggleButton label="隐藏条件查询" click="currentState='qry'" click.qry="currentState=''" label.qry="显示条件查询" />
+			<s:ToggleButton label="添加" click="add_clickHandler(event)"/>
+			<mx:Button label="生成首页数据" click="firstPage_clickHandler(event)"/><s:Spacer width="5"/>
+		</mx:HBox>
+		<mx:HBox width="100%" includeIn="default">
+			<s:Label text="名称:"/>
+			<s:TextInput id="name_id"/>
+			<s:Button label="查找" click="refresh(event)"/><s:Button label="清空条件" click="{name_id.text=''}"/>
+		</mx:HBox>
+	<mx:DataGrid width="100%" height="100%" dataProvider="{results}" id="datagrid_id">
+		<mx:columns>
+			<mx:DataGridColumn headerText="名称" dataField="name"/>
+			<mx:DataGridColumn headerText="类别" dataField="category_name"/>
+			<mx:DataGridColumn headerText="状态" dataField="active"/>
+			<mx:DataGridColumn headerText="排序" dataField="sort"/>
+			<mx:DataGridColumn headerText="创建人" dataField="createname" />
+			<mx:DataGridColumn headerText="创建时间" dataField="createtime" />
+			<mx:DataGridColumn headerText="图总数" dataField="imgcount" />
+			<mx:DataGridColumn headerText="{ resourceManager.getString('resources','common_action')}" width="90"  editable="false" sortable="false">
+				<mx:itemRenderer>
+					<fx:Component>
+						<mx:Button label="{ resourceManager.getString('resources','common_modify')}" click="parentDocument.picturepanel_id.showValue(data,false)"/>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+			<mx:DataGridColumn headerText="{ resourceManager.getString('resources','common_action')}" width="90"  editable="false" sortable="false">
+				<mx:itemRenderer>
+					<fx:Component>
+						<mx:Button label="{ resourceManager.getString('resources','common_delete')}" click="parentDocument.del_clickHandler(event)">
+						</mx:Button>
+					</fx:Component>
+				</mx:itemRenderer>
+			</mx:DataGridColumn>
+		</mx:columns>
+	</mx:DataGrid>
+		<mx:HBox width="100%">
+			<mx:Spacer width="100%"/>
+			<common:PageToolBar id="pageBar">
+			</common:PageToolBar><mx:Spacer width="5"/>
+		</mx:HBox>
+	</mx:VBox>
+	</mx:HBox>
+	<picture:CategoryPanel  id="panel_id" x="200" y="150" visible="false">
+	</picture:CategoryPanel>
+	<picture:PicturePanel  id="picturepanel_id" x="250" y="90" visible="false"/>
+</mx:Module>
